@@ -1042,8 +1042,8 @@ st.markdown("---")
 st.markdown('<div class="section-header">🤖 Claude Operations Copilot</div>', unsafe_allow_html=True)
 
 # ── Admin vs User login ─────────────────────────────────────────────────────
-ADMIN_PASSWORD  = "yk2511"   # ← change this to your own password
-ADMIN_API_KEY   = st.secrets.get("ANTHROPIC_API_KEY", "")  # stored in secrets
+ADMIN_PASSWORD  = st.secrets.get("ADMIN_PASSWORD", "ops@admin2024")
+ADMIN_API_KEY   = st.secrets.get("ANTHROPIC_API_KEY", "")
 
 if "is_admin" not in st.session_state:
     st.session_state["is_admin"] = False
