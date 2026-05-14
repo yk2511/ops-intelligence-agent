@@ -12,9 +12,9 @@ from datetime import datetime, date
 import requests
 import json
 
-SUPABASE_URL = "https://ahxlavywzivsfspoycqd.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoeGxhdnl3eml2c2ZzcG95Y3FkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3MzE0NzMsImV4cCI6MjA5NDMwNzQ3M30.wujfTDbpvHSo5frTGG7LvsFdH04wvtUO4j8wfvzxW6I"
-SUPABASE_OK  = True  # always True — uses requests which is always available
+SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "")
+SUPABASE_OK  = bool(SUPABASE_URL and SUPABASE_KEY)
 
 SB_HEADERS = {
     "apikey":        SUPABASE_KEY,
