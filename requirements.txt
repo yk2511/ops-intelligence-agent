@@ -1,0 +1,11 @@
+streamlit
+pandas
+plotly
+langchain-anthropic
+langchain-experimental
+anthropic
+reportlab
+kaleido
+pillow
+requests
+langchain
