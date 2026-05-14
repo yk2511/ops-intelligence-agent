@@ -424,54 +424,50 @@ def load_file(file_bytes, file_name):
     else:
         return pd.read_excel(io.BytesIO(file_bytes))
 
-all_dfs = {}
+# ── Use session_state to persist data across reruns ──────────────────────────
+if "all_dfs" not in st.session_state:
+    st.session_state["all_dfs"] = {}
 
 # ── Handle file uploads ──────────────────────────────────────────────────────
 if uploaded_files:
     for f in uploaded_files:
         raw = f.read()
-        all_dfs[f.name] = load_file(raw, f.name)
+        st.session_state["all_dfs"][f.name] = load_file(raw, f.name)
 
     # Save to Supabase if button clicked
     if save_to_cloud and SUPABASE_OK:
         with st.spinner("Saving to Supabase cloud..."):
             results = []
-            for fname, df in all_dfs.items():
+            for fname, df in st.session_state["all_dfs"].items():
                 table = fname.replace('.csv','').replace('.xlsx','').replace('.xls','')
-
-                # ── Duplicate prevention: delete existing rows for this date first ──
                 try:
                     clean_t = _clean_table(table)
                     del_url = f"{SUPABASE_URL}/rest/v1/{clean_t}?_upload_date=eq.{upload_date}"
                     requests.delete(del_url, headers=SB_HEADERS, timeout=30)
                 except Exception:
                     pass
-
                 result = upload_to_supabase(df, table, str(upload_date))
                 results.append((fname, result))
 
-            new_tables  = [r for _, r in results if not r["success"] and r.get("new_table")]
-            failed      = [r for _, r in results if not r["success"] and not r.get("new_table")]
-            succeeded   = [(f, r) for f, r in results if r["success"]]
+            new_tables = [r for _, r in results if not r["success"] and r.get("new_table")]
+            failed     = [r for _, r in results if not r["success"] and not r.get("new_table")]
+            succeeded  = [(f, r) for f, r in results if r["success"]]
 
             if succeeded:
                 total_rows = sum(r["rows"] for _, r in succeeded)
                 st.success(f"✅ {len(succeeded)} file(s) saved — {total_rows:,} rows for {upload_date}")
                 st.balloons()
-
             if new_tables:
-                st.warning(f"⚠️ {len(new_tables)} new table(s) detected — run the SQL below in Supabase, then upload again.")
+                st.warning(f"⚠️ {len(new_tables)} new table(s) detected — run SQL below, then upload again.")
                 for r in new_tables:
-                    with st.expander(f"📋 SQL to create table: {r['table']}"):
+                    with st.expander(f"📋 SQL to create: {r['table']}"):
                         st.code(r["create_sql"], language="sql")
-                        st.caption("Go to Supabase → SQL Editor → New Query → paste this → Run without RLS")
-
             if failed:
                 for _, r in failed:
                     st.error(f"❌ {r['message']}")
 
-    st.toast(f"✅ {len(all_dfs)} file(s) loaded!", icon="🚀")
-    st.caption(f"✓ **Active Files:** {', '.join(all_dfs.keys())}")
+    st.toast(f"✅ {len(st.session_state['all_dfs'])} file(s) loaded!", icon="🚀")
+    st.caption(f"✓ **Active Files:** {', '.join(st.session_state['all_dfs'].keys())}")
 
 # ── Load historical data from Supabase ──────────────────────────────────────
 elif load_history and SUPABASE_OK:
@@ -489,11 +485,10 @@ elif load_history and SUPABASE_OK:
                 loaded_count += 1
 
         if loaded_count > 0:
+            st.session_state["cloud_data"] = all_dfs
             total_rows = sum(len(v) for v in all_dfs.values())
             st.success(f"✅ Loaded {loaded_count} tables from cloud "
                        f"({total_rows:,} total rows across all history!)")
-
-            # Show upload history per table
             with st.expander("📅 Upload History"):
                 for table in known_tables:
                     if f"{table}.csv" in all_dfs:
@@ -504,6 +499,12 @@ elif load_history and SUPABASE_OK:
                                        f"{'...' if len(dates) > 5 else ''}")
         else:
             st.warning("No historical data found in cloud yet. Upload files first!")
+
+# ── Restore from session state if already loaded ────────────────────────────
+elif "cloud_data" in st.session_state and st.session_state["cloud_data"]:
+    all_dfs = st.session_state["cloud_data"]
+    st.caption(f"☁️ **Cloud data active:** {len(all_dfs)} tables — "
+               f"{sum(len(v) for v in all_dfs.values()):,} rows")
 
 else:
     # Fallback: local files
@@ -518,6 +519,10 @@ else:
     else:
         st.warning("⬆️ Please upload at least one CSV file to get started.")
         st.stop()
+
+if not all_dfs:
+    st.warning("⬆️ Please upload files or load historical data to continue.")
+    st.stop()
 
 if not all_dfs:
     st.warning("⬆️ Please upload files or load historical data to continue.")
