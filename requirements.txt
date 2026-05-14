@@ -9,3 +9,4 @@ kaleido
 pillow
 requests
 langchain
+tabulate
