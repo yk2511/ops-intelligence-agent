@@ -729,6 +729,184 @@ if '06_machine_shift_log.csv' in all_dfs:
             st.warning(f"Could not generate Pareto. Error: {e}")
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
+# WEEK VS WEEK TREND ANALYSIS
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown("")
+with st.expander("📊 Week vs Week Trend Analysis", expanded=False):
+    st.markdown("Compare key metrics across weeks to identify improving or worsening trends.")
+
+    try:
+        has_mc  = "07_material_consumption.csv" in all_dfs
+        has_po  = "03_production_orders.csv" in all_dfs
+        has_sl  = "06_machine_shift_log.csv" in all_dfs
+
+        if not (has_mc or has_po or has_sl):
+            st.info("Upload files 03, 06, or 07 to enable trend analysis.")
+        else:
+            # ── Build weekly metrics dataframe ───────────────────────────────
+            weekly_data = {}
+
+            # 1. Material Efficiency % — from file 07
+            if has_mc:
+                df_mc = all_dfs["07_material_consumption.csv"].copy()
+                df_mc["Issue_Date"] = pd.to_datetime(df_mc["Issue_Date"], errors="coerce")
+                df_mc["Week"] = df_mc["Issue_Date"].dt.to_period("W").astype(str)
+                df_mc["Material_Utilization_Pct"] = pd.to_numeric(
+                    df_mc["Material_Utilization_Pct"], errors="coerce")
+                weekly_data["Material Efficiency %"] = (
+                    df_mc.groupby("Week")["Material_Utilization_Pct"].mean().reset_index()
+                    .rename(columns={"Material_Utilization_Pct": "Value", "Week": "Period"})
+                )
+
+            # 2. Waste Cost INR — from file 07 + 01
+            if has_mc and "01_raw_material_master.csv" in all_dfs:
+                df_rm = all_dfs["01_raw_material_master.csv"].copy()
+                df_mc2 = all_dfs["07_material_consumption.csv"].copy()
+                df_mc2["Issue_Date"] = pd.to_datetime(df_mc2["Issue_Date"], errors="coerce")
+                df_mc2["Week"] = df_mc2["Issue_Date"].dt.to_period("W").astype(str)
+                df_mc2 = pd.merge(df_mc2, df_rm[["Material_Code","Unit_Cost_INR_per_kg"]],
+                                  on="Material_Code", how="left")
+                df_mc2["Unit_Cost_INR_per_kg"] = pd.to_numeric(
+                    df_mc2["Unit_Cost_INR_per_kg"], errors="coerce")
+                df_mc2["Scrap_Qty_kg"] = pd.to_numeric(df_mc2["Scrap_Qty_kg"], errors="coerce")
+                df_mc2["Purge_Qty_kg"] = pd.to_numeric(df_mc2["Purge_Qty_kg"], errors="coerce")
+                df_mc2["Waste_Cost"] = (df_mc2["Scrap_Qty_kg"] + df_mc2["Purge_Qty_kg"]) * df_mc2["Unit_Cost_INR_per_kg"]
+                weekly_data["Waste Cost (INR)"] = (
+                    df_mc2.groupby("Week")["Waste_Cost"].sum().reset_index()
+                    .rename(columns={"Waste_Cost": "Value", "Week": "Period"})
+                )
+
+            # 3. Rejection Rate % — from file 03
+            if has_po:
+                df_po = all_dfs["03_production_orders.csv"].copy()
+                df_po["Actual_Start"] = pd.to_datetime(df_po["Actual_Start"], errors="coerce")
+                df_po["Week"] = df_po["Actual_Start"].dt.to_period("W").astype(str)
+                df_po["Rejection_Rate_Pct"] = pd.to_numeric(
+                    df_po["Rejection_Rate_Pct"], errors="coerce")
+                weekly_data["Rejection Rate %"] = (
+                    df_po.groupby("Week")["Rejection_Rate_Pct"].mean().reset_index()
+                    .rename(columns={"Rejection_Rate_Pct": "Value", "Week": "Period"})
+                )
+
+            # 4. Machine Downtime — from file 06
+            if has_sl:
+                df_sl = all_dfs["06_machine_shift_log.csv"].copy()
+                df_sl["Date"] = pd.to_datetime(df_sl["Date"], errors="coerce")
+                df_sl["Week"] = df_sl["Date"].dt.to_period("W").astype(str)
+                df_sl["Downtime_Min"] = pd.to_numeric(df_sl["Downtime_Min"], errors="coerce")
+                weekly_data["Machine Downtime (mins)"] = (
+                    df_sl.groupby("Week")["Downtime_Min"].sum().reset_index()
+                    .rename(columns={"Downtime_Min": "Value", "Week": "Period"})
+                )
+
+            # ── Plot each metric ─────────────────────────────────────────────
+            colors_map = {
+                "Material Efficiency %":    "#10b981",
+                "Waste Cost (INR)":         "#ef4444",
+                "Rejection Rate %":         "#f59e0b",
+                "Machine Downtime (mins)":  "#6366f1",
+            }
+
+            trend_insights = {}
+
+            for metric, df_w in weekly_data.items():
+                if df_w.empty or df_w["Value"].isna().all():
+                    continue
+
+                df_w = df_w.dropna(subset=["Value"]).sort_values("Period")
+                if len(df_w) < 2:
+                    continue
+
+                # ── Chart ────────────────────────────────────────────────────
+                fig_t = go.Figure()
+                fig_t.add_trace(go.Bar(
+                    x=df_w["Period"], y=df_w["Value"],
+                    marker_color=colors_map.get(metric, "#2563eb"),
+                    opacity=0.7, name=metric
+                ))
+                fig_t.add_trace(go.Scatter(
+                    x=df_w["Period"], y=df_w["Value"],
+                    mode="lines+markers",
+                    line=dict(color=colors_map.get(metric, "#2563eb"), width=2.5),
+                    marker=dict(size=8), name="Trend"
+                ))
+
+                # Week-on-week change arrow
+                last_val  = df_w["Value"].iloc[-1]
+                prev_val  = df_w["Value"].iloc[-2]
+                change    = ((last_val - prev_val) / prev_val * 100) if prev_val != 0 else 0
+                arrow     = "📈" if change > 0 else "📉"
+                direction = "up" if change > 0 else "down"
+
+                fig_t.update_layout(
+                    title=f"{metric} — Weekly Trend  |  Last week: {arrow} {abs(change):.1f}% vs prior week",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(15,23,42,0.6)",
+                    font=dict(color="#cbd5e1"),
+                    height=320,
+                    margin=dict(l=20, r=20, t=50, b=60),
+                    xaxis=dict(tickangle=-30, gridcolor="rgba(51,65,85,0.4)"),
+                    yaxis=dict(gridcolor="rgba(51,65,85,0.4)"),
+                    showlegend=False
+                )
+                st.plotly_chart(fig_t, use_container_width=True)
+
+                # Store for AI insight
+                trend_insights[metric] = {
+                    "weeks":     df_w["Period"].tolist(),
+                    "values":    df_w["Value"].round(2).tolist(),
+                    "last":      round(last_val, 2),
+                    "prev":      round(prev_val, 2),
+                    "change_pct": round(change, 2),
+                    "direction": direction
+                }
+
+            # ── AI Insight per metric ────────────────────────────────────────
+            if trend_insights:
+                st.markdown("---")
+                st.markdown("### 🤖 AI Trend Insights")
+                ai_key = st.session_state.get("user_api_key", "")
+
+                if not ai_key:
+                    st.info("🔑 Login as Admin or enter your API key in the Copilot section to get AI insights.")
+                else:
+                    if st.button("⚡ Generate AI Trend Insights", type="primary"):
+                        import anthropic
+                        client = anthropic.Anthropic(api_key=ai_key)
+
+                        trend_text = ""
+                        for metric, data in trend_insights.items():
+                            trend_text += (
+                                f"\n{metric}:\n"
+                                f"  Weekly values: {data['values']}\n"
+                                f"  Last week: {data['last']} | Prior week: {data['prev']} | "
+                                f"Change: {data['change_pct']:+.1f}%\n"
+                            )
+
+                        prompt = (
+                            "You are an operations analyst for a plastic injection moulding plant. "
+                            "Analyse these week-on-week trends and give sharp, specific insights:\n"
+                            + trend_text +
+                            "\nFor each metric: 1 sentence on what happened, 1 sentence on why it might have happened, "
+                            "1 sentence on what action to take. Be direct and specific. "
+                            "Format as: **[Metric Name]**: insight. "
+                            "End with one overall plant health verdict in bold."
+                        )
+
+                        with st.spinner("AI is analysing weekly trends..."):
+                            response = client.messages.create(
+                                model="claude-sonnet-4-5",
+                                max_tokens=600,
+                                messages=[{"role": "user", "content": prompt}]
+                            )
+                            insight_text = response.content[0].text
+
+                        st.markdown(insight_text)
+
+    except Exception as e:
+        st.warning(f"Trend analysis error: {e}")
+
 # CUSTOM REPORT BUILDER
 # ══════════════════════════════════════════════════════════════════════════════
 st.markdown("")
