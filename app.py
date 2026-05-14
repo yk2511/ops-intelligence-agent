@@ -426,19 +426,23 @@ def load_file(file_bytes, file_name):
 
 # ── Use session_state to persist data across reruns ──────────────────────────
 if "all_dfs" not in st.session_state:
-    st.session_state["all_dfs"] = {}
+    all_dfs = {}
+
+
+# ── Initialize all_dfs ─────────────────────────────────────────────────────
+all_dfs = {}
 
 # ── Handle file uploads ──────────────────────────────────────────────────────
 if uploaded_files:
     for f in uploaded_files:
         raw = f.read()
-        st.session_state["all_dfs"][f.name] = load_file(raw, f.name)
+        all_dfs[f.name] = load_file(raw, f.name)
 
     # Save to Supabase if button clicked
     if save_to_cloud and SUPABASE_OK:
         with st.spinner("Saving to Supabase cloud..."):
             results = []
-            for fname, df in st.session_state["all_dfs"].items():
+            for fname, df in all_dfs.items():
                 table = fname.replace('.csv','').replace('.xlsx','').replace('.xls','')
                 try:
                     clean_t = _clean_table(table)
