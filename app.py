@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import os
 import io
 import plotly.graph_objects as go
@@ -156,6 +157,360 @@ def get_upload_history(table_name: str) -> list:
 # PAGE CONFIG
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(page_title="Ops Intelligence Agent", layout="wide", page_icon="🏭")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DEMO DATA — Apex Polymers Plant, Pune (Synthetic)
+# ══════════════════════════════════════════════════════════════════════════════
+def get_demo_data():
+    """Generate realistic synthetic data for Apex Polymers Plant, Pune."""
+    import random
+    random.seed(42)
+    np.random.seed(42)
+
+    dates = pd.date_range("2026-03-01", "2026-05-14", freq="D")
+
+    # 01 — Raw Material Master
+    rm_master = pd.DataFrame({
+        "Material_Code":        ["RM-ABS-01","RM-ABS-02","RM-PP-01","RM-PC-01","RM-NYLON-01"],
+        "Material_Name":        ["ABS Natural","ABS Black","PP Homopolymer","Polycarbonate","Nylon 66"],
+        "Polymer_Type":         ["ABS","ABS","PP","PC","PA66"],
+        "Grade":                ["GP","GP","H030SG","110","A125"],
+        "Color":                ["Natural","Black","Natural","Clear","Natural"],
+        "Density_g_per_cm3":    [1.05, 1.05, 0.91, 1.20, 1.14],
+        "Drying_Temp_C":        [80, 80, 70, 120, 85],
+        "Drying_Time_hrs":      [4, 4, 2, 4, 4],
+        "Melt_Temp_Min_C":      [220,220,200,280,260],
+        "Melt_Temp_Max_C":      [260,260,240,320,290],
+        "Mold_Temp_C":          [60,60,40,80,70],
+        "MOQ_kg":               [500,500,300,200,250],
+        "Unit_Cost_INR_per_kg": [185,185,92,420,310],
+        "UOM":                  ["KG"]*5,
+        "Status":               ["Active"]*5,
+    })
+
+    # 02 — Part Master
+    part_master = pd.DataFrame({
+        "Part_Code":            ["P-001","P-002","P-003","P-004","P-005"],
+        "Part_Name":            ["Dashboard Panel","Door Handle","Gear Knob","AC Vent","Bumper Clip"],
+        "Customer_Code":        ["CUST-01","CUST-02","CUST-01","CUST-03","CUST-02"],
+        "Customer_Name":        ["Tata Motors","Mahindra","Tata Motors","Maruti Suzuki","Mahindra"],
+        "Material_Code":        ["RM-ABS-01","RM-ABS-02","RM-PP-01","RM-PC-01","RM-NYLON-01"],
+        "Material_Name":        ["ABS Natural","ABS Black","PP Homopolymer","Polycarbonate","Nylon 66"],
+        "Mold_ID":              ["MLD-01","MLD-02","MLD-03","MLD-04","MLD-05"],
+        "No_of_Cavities":       [4,2,8,4,16],
+        "Shot_Weight_g":        [480,320,160,240,48],
+        "Runner_Weight_g":      [32,20,12,18,6],
+        "Total_Shot_Weight_g":  [512,340,172,258,54],
+        "Parts_Per_Shot":       [4,2,8,4,16],
+        "Cycle_Time_sec":       [45,38,28,52,22],
+        "Req_Machine_Tonnage_T":[200,150,100,180,80],
+        "Material_per_Part_g":  [120,160,20,60,3],
+        "Status":               ["Active"]*5,
+    })
+
+    # 03 — Production Orders
+    wo_ids, machines = [], []
+    records_po = []
+    machine_list = ["IMM-01","IMM-02","IMM-03","IMM-04"]
+    part_codes   = ["P-001","P-002","P-003","P-004","P-005"]
+    part_names   = ["Dashboard Panel","Door Handle","Gear Knob","AC Vent","Bumper Clip"]
+    cust_codes   = ["CUST-01","CUST-02","CUST-01","CUST-03","CUST-02"]
+    cust_names   = ["Tata Motors","Mahindra","Tata Motors","Maruti Suzuki","Mahindra"]
+    mat_codes    = ["RM-ABS-01","RM-ABS-02","RM-PP-01","RM-PC-01","RM-NYLON-01"]
+    mat_names    = ["ABS Natural","ABS Black","PP Homopolymer","Polycarbonate","Nylon 66"]
+    mold_ids     = ["MLD-01","MLD-02","MLD-03","MLD-04","MLD-05"]
+    supervisors  = ["Rajesh Kumar","Priya Sharma","Amit Patel","Suresh Nair"]
+
+    for i, d in enumerate(dates[:60]):
+        pi  = i % 5
+        mid = i % 4
+        planned = random.randint(800, 2000)
+        rej     = random.randint(10, int(planned * 0.06))
+        actual  = planned - rej
+        mat_used= round(actual * [120,160,20,60,3][pi] / 1000 * 1.08, 2)
+        wo_id   = f"WO-{1000+i}"
+        wo_ids.append(wo_id)
+        machines.append(machine_list[mid])
+        records_po.append({
+            "WO_ID": wo_id, "CO_ID": f"CO-{500+i}",
+            "Machine_ID": machine_list[mid], "Machine_Tonnage_T": [200,150,100,180][mid],
+            "Part_Code": part_codes[pi], "Part_Name": part_names[pi],
+            "Customer_Code": cust_codes[pi], "Customer_Name": cust_names[pi],
+            "Material_Code": mat_codes[pi], "Material_Name": mat_names[pi],
+            "Mold_ID": mold_ids[pi], "No_of_Cavities": [4,2,8,4,16][pi],
+            "Planned_Qty_Parts": planned, "Actual_Good_Parts": actual,
+            "Rejection_Qty": rej, "Rejection_Rate_Pct": round(rej/planned*100,2),
+            "Planned_Shots": planned//[4,2,8,4,16][pi],
+            "Actual_Shots":  actual//[4,2,8,4,16][pi],
+            "Total_Material_Used_kg": mat_used,
+            "Planned_Start": str(d), "Planned_End": str(d),
+            "Actual_Start": str(d), "Actual_End": str(d),
+            "Status": "Completed", "Shift_Supervisor": supervisors[i%4],
+        })
+    df_po = pd.DataFrame(records_po)
+
+    # 04 — Mold Changeover Log
+    records_co = []
+    for i in range(30):
+        d = dates[i*2]
+        records_co.append({
+            "Changeover_ID": f"CO-LOG-{100+i}",
+            "Machine_ID": machine_list[i%4],
+            "Date": str(d.date()),
+            "Shift": ["Morning","Evening"][i%2],
+            "From_Mold_ID": mold_ids[i%5],
+            "From_Part_Name": part_names[i%5],
+            "To_Mold_ID": mold_ids[(i+1)%5],
+            "To_Part_Name": part_names[(i+1)%5],
+            "Changeover_Start": f"{d.date()} 08:00",
+            "Changeover_End":   f"{d.date()} 09:30",
+            "Changeover_Duration_min": random.randint(45, 120),
+            "Purge_Material_Code": mat_codes[i%5],
+            "Purge_Material_Name": mat_names[i%5],
+            "Purge_Qty_kg": round(random.uniform(2, 8), 2),
+            "Technician_ID": f"TECH-{101+i%4}",
+            "WO_ID": wo_ids[i],
+        })
+    df_co = pd.DataFrame(records_co)
+
+    # 05 — Customer Orders
+    records_ord = []
+    for i in range(40):
+        pi      = i % 5
+        ordered = random.randint(5000, 20000)
+        deliv   = random.randint(int(ordered*0.6), ordered)
+        records_ord.append({
+            "CO_ID": f"CO-{500+i}",
+            "Customer_Code": cust_codes[pi],
+            "Customer_Name": cust_names[pi],
+            "Part_Code": part_codes[pi],
+            "Part_Name": part_names[pi],
+            "Material_Code": mat_codes[pi],
+            "Ordered_Qty_Parts": ordered,
+            "Delivered_Qty": deliv,
+            "Pending_Qty": ordered - deliv,
+            "Order_Date": str(dates[i].date()),
+            "Required_Delivery_Date": str(dates[min(i+14, len(dates)-1)].date()),
+            "Status": "Partial" if deliv < ordered else "Completed",
+            "Customer_PO_Ref": f"PO-TM-{2000+i}",
+        })
+    df_ord = pd.DataFrame(records_ord)
+
+    # 06 — Machine Shift Log (largest — 4 machines x 2 shifts x 75 days)
+    defects   = ["Weld Line","Sink Mark","Flash","Short Shot","Burn Mark","Colour Variation","Dimensional OOS"]
+    dt_reasons= ["Mold Change","Machine Breakdown","Material Shortage","Power Cut","Scheduled PM",""]
+    records_sl = []
+    log_id = 1
+    for d in dates:
+        for mach in machine_list:
+            for shift in ["Morning","Evening"]:
+                pi       = log_id % 5
+                planned  = random.randint(200, 500)
+                actual   = random.randint(180, planned)
+                good     = random.randint(int(actual*0.93), actual)
+                rejected = actual - good
+                downtime = random.randint(0, 45)
+                records_sl.append({
+                    "Log_ID": f"LOG-{log_id:04d}",
+                    "Machine_ID": mach,
+                    "Machine_Tonnage_T": [200,150,100,180][machine_list.index(mach)],
+                    "WO_ID": wo_ids[log_id % len(wo_ids)],
+                    "Part_Code": part_codes[pi],
+                    "Material_Code": mat_codes[pi],
+                    "Date": str(d.date()),
+                    "Shift": shift,
+                    "Shift_Start": f"{d.date()} {'08:00' if shift=='Morning' else '20:00'}",
+                    "Shift_End":   f"{d.date()} {'20:00' if shift=='Morning' else '08:00'}",
+                    "Operator_ID": f"OP-{201+log_id%8}",
+                    "Planned_Shots": planned,
+                    "Actual_Shots":  actual,
+                    "Good_Parts":    good,
+                    "Rejected_Parts": rejected,
+                    "Rejection_Reason": random.choice(defects),
+                    "Downtime_Min":  downtime,
+                    "Downtime_Reason": random.choice(dt_reasons) if downtime > 0 else "",
+                    "Material_Consumed_kg": round(good * [120,160,20,60,3][pi] / 1000 * 1.05, 3),
+                    "Actual_Cycle_Time_sec": round(random.uniform(22, 55), 1),
+                })
+                log_id += 1
+    df_sl = pd.DataFrame(records_sl)
+
+    # 07 — Material Consumption
+    records_mc = []
+    for i, row in df_po.iterrows():
+        issued   = float(row["Total_Material_Used_kg"]) * 1.10
+        consumed = float(row["Total_Material_Used_kg"])
+        scrap    = round(consumed * random.uniform(0.02, 0.05), 3)
+        purge    = round(consumed * random.uniform(0.01, 0.03), 3)
+        returned = round(issued - consumed - scrap - purge, 3)
+        util     = round(consumed / issued * 100, 2)
+        records_mc.append({
+            "Consumption_ID":         f"CONS-{1000+i}",
+            "WO_ID":                  row["WO_ID"],
+            "Material_Code":          row["Material_Code"],
+            "Material_Name":          row["Material_Name"],
+            "Lot_No":                 f"LOT-{2024+i%10}",
+            "Issue_Date":             row["Actual_Start"],
+            "Return_Date":            row["Actual_End"],
+            "Qty_Issued_kg":          round(issued, 3),
+            "Qty_Consumed_kg":        round(consumed, 3),
+            "Purge_Qty_kg":           purge,
+            "Scrap_Qty_kg":           scrap,
+            "Returned_to_Store_kg":   max(returned, 0),
+            "Material_Utilization_Pct": util,
+        })
+    df_mc = pd.DataFrame(records_mc)
+
+    # 08 — Purchase Orders / GRN
+    suppliers = ["PolyPrime Ltd","BASF India","Reliance Polymers","LG Chem India","Lanxess India"]
+    records_po2 = []
+    for i in range(20):
+        mi  = i % 5
+        qty = random.randint(1000, 5000)
+        price = [185,185,92,420,310][mi]
+        records_po2.append({
+            "PO_ID":            f"PO-{3000+i}",
+            "Supplier_Code":    f"SUP-{101+mi}",
+            "Supplier_Name":    suppliers[mi],
+            "Material_Code":    mat_codes[mi],
+            "Material_Name":    mat_names[mi],
+            "Polymer_Type":     ["ABS","ABS","PP","PC","PA66"][mi],
+            "PO_Qty_kg":        qty,
+            "Unit_Price_INR":   price,
+            "Total_Value_INR":  qty * price,
+            "Currency":         "INR",
+            "PO_Date":          str(dates[i*3].date()),
+            "Expected_Delivery":str(dates[min(i*3+14,len(dates)-1)].date()),
+            "Lead_Time_Days":   random.randint(7, 21),
+            "PO_Status":        random.choice(["Delivered","Pending","Partial"]),
+            "GRN_No":           f"GRN-{4000+i}" if i % 3 != 0 else "",
+            "GRN_Date":         str(dates[min(i*3+10,len(dates)-1)].date()) if i%3!=0 else "",
+            "GRN_Qty_kg":       qty if i%3!=0 else "",
+            "COA_No":           f"COA-{5000+i}" if i%3!=0 else "",
+            "Payment_Terms":    random.choice(["30 Days","45 Days","60 Days"]),
+        })
+    df_po2 = pd.DataFrame(records_po2)
+
+    # 09 — Raw Material Inventory
+    records_inv = []
+    for i, row in rm_master.iterrows():
+        for j in range(3):
+            recv = random.randint(500, 2000)
+            cons = random.randint(100, recv-50)
+            records_inv.append({
+                "Inventory_ID":     f"INV-{100+i*3+j}",
+                "Material_Code":    row["Material_Code"],
+                "Material_Name":    row["Material_Name"],
+                "Polymer_Type":     row["Polymer_Type"],
+                "Lot_No":           f"LOT-{2024+j}",
+                "GRN_Ref":          f"GRN-{4000+i*3+j}",
+                "Supplier_Name":    suppliers[i],
+                "Received_Date":    str(dates[i*10+j*5].date()),
+                "Qty_Received_kg":  recv,
+                "Qty_Consumed_kg":  cons,
+                "Qty_Available_kg": recv - cons,
+                "UOM":              "KG",
+                "Storage_Location": f"SILO-{i+1:02d}",
+                "Drying_Status":    random.choice(["Dried","Drying","Pending"]),
+                "Drying_Temp_C":    row["Drying_Temp_C"],
+                "Drying_Time_hrs":  row["Drying_Time_hrs"],
+                "Lot_Value_INR":    recv * int(row["Unit_Cost_INR_per_kg"]),
+                "Currency":         "INR",
+                "Stock_Status":     "OK" if (recv-cons) > int(row["MOQ_kg"]) else "LOW",
+                "COA_No":           f"COA-AP-{5000+i*3+j}",
+            })
+    df_inv = pd.DataFrame(records_inv)
+
+    return {
+        "01_raw_material_master.csv": rm_master,
+        "02_part_master.csv":         part_master,
+        "03_production_orders.csv":   df_po,
+        "04_mold_changeover_log.csv": df_co,
+        "05_customer_orders.csv":     df_ord,
+        "06_machine_shift_log.csv":   df_sl,
+        "07_material_consumption.csv":df_mc,
+        "08_purchase_orders_grn.csv": df_po2,
+        "09_raw_material_inventory.csv": df_inv,
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LOGIN GATE — Show before anything else
+# ══════════════════════════════════════════════════════════════════════════════
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+if "demo_mode" not in st.session_state:
+    st.session_state["demo_mode"] = False
+
+def show_login_screen():
+    """Full-screen login gate."""
+    st.markdown("""
+    <div style='max-width:520px;margin:4rem auto;'>
+    <div style='background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 60%,#1d4ed8 100%);
+    border-radius:20px;padding:2.5rem 3rem;border:1px solid rgba(99,179,237,0.2);
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);text-align:center;'>
+    <div style='font-size:3rem;margin-bottom:0.5rem'>🏭</div>
+    <h1 style='color:white;font-size:1.6rem;font-weight:700;margin:0 0 0.25rem 0'>
+    Ops Intelligence Agent</h1>
+    <p style='color:#93c5fd;font-size:0.85rem;margin:0 0 0.5rem 0'>
+    AI-Powered Raw Material Optimization</p>
+    <span style='background:rgba(99,179,237,0.15);border:1px solid rgba(99,179,237,0.3);
+    color:#93c5fd;border-radius:20px;padding:0.2rem 0.75rem;font-size:0.7rem;
+    font-weight:600;letter-spacing:0.5px;text-transform:uppercase'>
+    ⚡ Powered by Claude AI</span>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_l, col_mid, col_r = st.columns([1, 2, 1])
+    with col_mid:
+        st.markdown("###")
+        tab_login, tab_demo = st.tabs(["🔐 Admin Login", "🎮 Try Demo"])
+
+        with tab_login:
+            st.markdown("Enter your admin credentials to access the full platform.")
+            pwd = st.text_input("Password", type="password",
+                                placeholder="Enter admin password", key="login_pwd")
+            if st.button("Login →", type="primary", use_container_width=True):
+                ADMIN_PWD = st.secrets.get("ADMIN_PASSWORD", "")
+                if pwd and pwd == ADMIN_PWD:
+                    st.session_state["authenticated"] = True
+                    st.session_state["demo_mode"]     = False
+                    st.session_state["is_admin"]      = True
+                    st.session_state["user_api_key"]  = st.secrets.get("ANTHROPIC_API_KEY", "")
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password")
+
+        with tab_demo:
+            st.markdown("""
+            **Apex Polymers Plant, Pune** — Fictional Demo
+
+            Explore the full dashboard with 75 days of realistic
+            synthetic data across all 9 data modules.
+
+            - ✅ All charts & visualizations
+            - ✅ Sankey + Pareto analysis
+            - ✅ Week vs week trends
+            - ✅ Morning PDF report
+            - ✅ AI Copilot *(bring your own API key)*
+            - ✅ Custom report builder
+            """)
+            if st.button("🚀 Launch Demo", type="primary", use_container_width=True):
+                st.session_state["authenticated"] = True
+                st.session_state["demo_mode"]     = True
+                st.session_state["is_admin"]      = False
+                st.session_state["cloud_data"]    = get_demo_data()
+                st.rerun()
+
+        st.markdown("---")
+        st.caption("Built with Claude AI · Supabase · Streamlit · "
+                   "For demo enquiries contact via LinkedIn")
+
+if not st.session_state["authenticated"]:
+    show_login_screen()
+    st.stop()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # GLOBAL CSS — Professional Styling
@@ -370,164 +725,187 @@ hr {
 # ══════════════════════════════════════════════════════════════════════════════
 # HEADER BANNER
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown("""
-<div class="header-banner">
-    <h1>🏭 Raw Material Optimization Dashboard</h1>
-    <p>AI-powered operations intelligence for plastic injection moulding plants</p>
-    <span class="header-tag">⚡ Operations Intelligence Platform &nbsp;|&nbsp; Plastic Injection Moulding</span>
-</div>
-""", unsafe_allow_html=True)
+# ── Demo mode banner + logout ───────────────────────────────────────────────
+hdr_col1, hdr_col2 = st.columns([5, 1])
+with hdr_col1:
+    if st.session_state.get("demo_mode"):
+        st.markdown("""
+        <div class="header-banner">
+            <h1>🏭 Ops Intelligence Agent — Demo Mode</h1>
+            <p>Apex Polymers Plant, Pune · Synthetic Data · 75 Days</p>
+            <span class="header-tag">🎮 Demo &nbsp;|&nbsp; ⚡ Powered by Claude AI</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div class="header-banner">
+            <h1>🏭 Raw Material Optimization Dashboard</h1>
+            <p>AI-powered operations intelligence for plastic injection moulding plants</p>
+            <span class="header-tag">⚡ Powered by Claude AI &nbsp;|&nbsp; MBA Pilot Project</span>
+        </div>
+        """, unsafe_allow_html=True)
+with hdr_col2:
+    st.markdown("<div style='margin-top:1.5rem'>", unsafe_allow_html=True)
+    if st.button("🚪 Logout", use_container_width=True):
+        for key in ["authenticated","demo_mode","is_admin","user_api_key","cloud_data","messages"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FILE UPLOAD + CLOUD SYNC
 # ══════════════════════════════════════════════════════════════════════════════
-has_files = 'user_files' in st.session_state and bool(st.session_state.user_files)
-
-with st.expander("📂 File Manager & Cloud Sync", expanded=not has_files):
-    # ── Two tabs: Upload Today's Data | Load Historical Data ─────────────────
-    tab_upload, tab_history = st.tabs(["📤 Upload & Save to Cloud", "☁️ Load Historical Data"])
-
-    with tab_upload:
-        st.markdown("Upload today's files. They will be **saved to Supabase cloud** and appended to historical data.")
-
-        up_col1, up_col2 = st.columns([3, 2])
-        with up_col1:
-            uploaded_files = st.file_uploader(
-                "Upload production data",
-                type=["csv", "xlsx", "xls"],
-                accept_multiple_files=True,
-                key="user_files",
-                label_visibility="collapsed"
-            )
-        with up_col2:
-            upload_date = st.date_input("Data Date", value=date.today(),
-                                        help="Select the date this data represents")
-            save_to_cloud = st.button("☁️ Save to Cloud", type="primary",
-                                      use_container_width=True,
-                                      disabled=not SUPABASE_OK)
-            if not SUPABASE_OK:
-                st.caption("Run: `pip install supabase` to enable cloud sync")
-
-    with tab_history:
-        st.markdown("Load all historical data stored in Supabase cloud for trend analysis.")
-        load_history = st.button("📥 Load All Historical Data", type="primary",
-                                  use_container_width=True, disabled=not SUPABASE_OK)
-        if SUPABASE_OK:
-            st.caption("This loads ALL data ever uploaded — across all days — for full trend analysis.")
-        else:
-            st.caption("Run: `pip install supabase` to enable cloud sync")
-
-@st.cache_data
-def load_file(file_bytes, file_name):
-    if file_name.endswith('.csv'):
-        return pd.read_csv(io.BytesIO(file_bytes))
-    else:
-        return pd.read_excel(io.BytesIO(file_bytes))
-
-# ── Use session_state to persist data across reruns ──────────────────────────
-if "all_dfs" not in st.session_state:
-    all_dfs = {}
-
-
-# ── Initialize all_dfs ─────────────────────────────────────────────────────
-all_dfs = {}
-
-# ── Handle file uploads ──────────────────────────────────────────────────────
-if uploaded_files:
-    for f in uploaded_files:
-        raw = f.read()
-        all_dfs[f.name] = load_file(raw, f.name)
-
-    # Save to Supabase if button clicked
-    if save_to_cloud and SUPABASE_OK:
-        with st.spinner("Saving to Supabase cloud..."):
-            results = []
-            for fname, df in all_dfs.items():
-                table = fname.replace('.csv','').replace('.xlsx','').replace('.xls','')
-                try:
-                    clean_t = _clean_table(table)
-                    del_url = f"{SUPABASE_URL}/rest/v1/{clean_t}?_upload_date=eq.{upload_date}"
-                    requests.delete(del_url, headers=SB_HEADERS, timeout=30)
-                except Exception:
-                    pass
-                result = upload_to_supabase(df, table, str(upload_date))
-                results.append((fname, result))
-
-            new_tables = [r for _, r in results if not r["success"] and r.get("new_table")]
-            failed     = [r for _, r in results if not r["success"] and not r.get("new_table")]
-            succeeded  = [(f, r) for f, r in results if r["success"]]
-
-            if succeeded:
-                total_rows = sum(r["rows"] for _, r in succeeded)
-                st.success(f"✅ {len(succeeded)} file(s) saved — {total_rows:,} rows for {upload_date}")
-                st.balloons()
-            if new_tables:
-                st.warning(f"⚠️ {len(new_tables)} new table(s) detected — run SQL below, then upload again.")
-                for r in new_tables:
-                    with st.expander(f"📋 SQL to create: {r['table']}"):
-                        st.code(r["create_sql"], language="sql")
-            if failed:
-                for _, r in failed:
-                    st.error(f"❌ {r['message']}")
-
-    st.toast(f"✅ {len(st.session_state['all_dfs'])} file(s) loaded!", icon="🚀")
-    st.caption(f"✓ **Active Files:** {', '.join(st.session_state['all_dfs'].keys())}")
-
-# ── Load historical data from Supabase ──────────────────────────────────────
-elif load_history and SUPABASE_OK:
-    with st.spinner("Loading historical data from Supabase..."):
-        known_tables = [
-            "01_raw_material_master", "02_part_master", "03_production_orders",
-            "04_mold_changeover_log", "05_customer_orders", "06_machine_shift_log",
-            "07_material_consumption", "08_purchase_orders_grn", "09_raw_material_inventory"
-        ]
-        loaded_count = 0
-        for table in known_tables:
-            df_hist = fetch_from_supabase(table)
-            if not df_hist.empty:
-                all_dfs[f"{table}.csv"] = df_hist
-                loaded_count += 1
-
-        if loaded_count > 0:
-            st.session_state["cloud_data"] = all_dfs
-            total_rows = sum(len(v) for v in all_dfs.values())
-            st.success(f"✅ Loaded {loaded_count} tables from cloud "
-                       f"({total_rows:,} total rows across all history!)")
-            with st.expander("📅 Upload History"):
-                for table in known_tables:
-                    if f"{table}.csv" in all_dfs:
-                        dates = get_upload_history(table)
-                        if dates:
-                            st.caption(f"**{table}** — {len(dates)} upload(s): "
-                                       f"{', '.join(dates[:5])}"
-                                       f"{'...' if len(dates) > 5 else ''}")
-        else:
-            st.warning("No historical data found in cloud yet. Upload files first!")
-
-# ── Restore from session state if already loaded ────────────────────────────
-elif "cloud_data" in st.session_state and st.session_state["cloud_data"]:
-    all_dfs = st.session_state["cloud_data"]
-    st.caption(f"☁️ **Cloud data active:** {len(all_dfs)} tables — "
-               f"{sum(len(v) for v in all_dfs.values()):,} rows")
-
+# ── Demo mode: use pre-loaded synthetic data ────────────────────────────────
+if st.session_state.get("demo_mode"):
+    all_dfs = st.session_state.get("cloud_data", get_demo_data())
+    st.session_state["cloud_data"] = all_dfs
+    st.info("🎮 **Demo Mode** — Apex Polymers Plant, Pune · 75 days synthetic data loaded · "
+            "Enter your Anthropic API key in the Copilot section to activate AI features.")
 else:
-    # Fallback: local files
-    local_files = ['bom_master.csv', 'production_logs.csv', 'scrap_logs.csv']
-    for fname in local_files:
-        try:
-            all_dfs[fname] = pd.read_csv(fname)
-        except FileNotFoundError:
-            pass
-    if all_dfs:
-        st.caption(f"📁 **Using local files:** {', '.join(all_dfs.keys())}")
+    all_dfs   = {}
+    has_files = "user_files" in st.session_state and bool(st.session_state.user_files)
+
+    with st.expander("📂 File Manager & Cloud Sync", expanded=not has_files):
+        tab_upload, tab_history = st.tabs(["📤 Upload & Save to Cloud", "☁️ Load Historical Data"])
+
+        with tab_upload:
+            st.markdown("Upload today's files. They will be **saved to Supabase cloud** and appended to historical data.")
+            up_col1, up_col2 = st.columns([3, 2])
+            with up_col1:
+                uploaded_files = st.file_uploader(
+                    "Upload production data",
+                    type=["csv", "xlsx", "xls"],
+                    accept_multiple_files=True,
+                    key="user_files",
+                    label_visibility="collapsed"
+                )
+            with up_col2:
+                upload_date   = st.date_input("Data Date", value=date.today(),
+                                               help="Select the date this data represents")
+                save_to_cloud = st.button("☁️ Save to Cloud", type="primary",
+                                          use_container_width=True,
+                                          disabled=not SUPABASE_OK)
+                if not SUPABASE_OK:
+                    st.caption("Add SUPABASE_URL and SUPABASE_KEY to secrets to enable cloud sync")
+
+        with tab_history:
+            st.markdown("Load all historical data stored in Supabase cloud for trend analysis.")
+            load_history = st.button("📥 Load All Historical Data", type="primary",
+                                      use_container_width=True, disabled=not SUPABASE_OK)
+            if SUPABASE_OK:
+                st.caption("This loads ALL data ever uploaded — across all days — for full trend analysis.")
+            else:
+                st.caption("Add SUPABASE credentials to secrets to enable cloud sync")
+
+    @st.cache_data
+    def load_file(file_bytes, file_name):
+        if file_name.endswith(".csv"):
+            return pd.read_csv(io.BytesIO(file_bytes))
+        else:
+            return pd.read_excel(io.BytesIO(file_bytes))
+
+    if uploaded_files:
+        for f in uploaded_files:
+            raw = f.read()
+            all_dfs[f.name] = load_file(raw, f.name)
+
+        if save_to_cloud and SUPABASE_OK:
+            with st.spinner("Saving to Supabase cloud..."):
+                results = []
+                for fname, df in all_dfs.items():
+                    table = fname.replace(".csv","").replace(".xlsx","").replace(".xls","")
+                    try:
+                        clean_t = _clean_table(table)
+                        del_url = f"{SUPABASE_URL}/rest/v1/{clean_t}?_upload_date=eq.{upload_date}"
+                        requests.delete(del_url, headers=SB_HEADERS, timeout=30)
+                    except Exception:
+                        pass
+                    result = upload_to_supabase(df, table, str(upload_date))
+                    results.append((fname, result))
+
+                new_tables = [r for _, r in results if not r["success"] and r.get("new_table")]
+                failed     = [r for _, r in results if not r["success"] and not r.get("new_table")]
+                succeeded  = [(f, r) for f, r in results if r["success"]]
+
+                if succeeded:
+                    total_rows = sum(r["rows"] for _, r in succeeded)
+                    st.success(f"✅ {len(succeeded)} file(s) saved — {total_rows:,} rows for {upload_date}")
+                    st.balloons()
+
+                if new_tables:
+                    st.warning(f"⚠️ {len(new_tables)} new table(s) detected — run SQL below in Supabase, then upload again.")
+                    for r in new_tables:
+                        with st.expander(f"📋 SQL to create table: {r['table']}"):
+                            st.code(r["create_sql"], language="sql")
+                            st.caption("Go to Supabase → SQL Editor → New Query → paste → Run without RLS")
+
+                if failed:
+                    for _, r in failed:
+                        st.error(f"❌ {r['message']}")
+
+        st.toast(f"✅ {len(all_dfs)} file(s) loaded!", icon="🚀")
+        st.caption(f"✓ **Active Files:** {', '.join(all_dfs.keys())}")
+
+    elif "load_history" in dir() and load_history and SUPABASE_OK:
+        with st.spinner("Loading historical data from Supabase..."):
+            known_tables = [
+                "01_raw_material_master","02_part_master","03_production_orders",
+                "04_mold_changeover_log","05_customer_orders","06_machine_shift_log",
+                "07_material_consumption","08_purchase_orders_grn","09_raw_material_inventory"
+            ]
+            loaded_count = 0
+            for table in known_tables:
+                df_hist = fetch_from_supabase(table)
+                if not df_hist.empty:
+                    all_dfs[f"{table}.csv"] = df_hist
+                    loaded_count += 1
+
+            if loaded_count > 0:
+                st.session_state["cloud_data"] = all_dfs
+                total_rows = sum(len(v) for v in all_dfs.values())
+                st.success(f"✅ Loaded {loaded_count} tables from cloud ({total_rows:,} total rows!)")
+                with st.expander("📅 Upload History"):
+                    for table in known_tables:
+                        if f"{table}.csv" in all_dfs:
+                            dates_list = get_upload_history(table)
+                            if dates_list:
+                                st.caption(f"**{table}** — {len(dates_list)} upload(s): "
+                                           f"{', '.join(dates_list[:5])}"
+                                           f"{'...' if len(dates_list) > 5 else ''}")
+            else:
+                st.warning("No historical data found in cloud yet. Upload files first!")
+
+    elif "cloud_data" in st.session_state and st.session_state["cloud_data"]:
+        all_dfs = st.session_state["cloud_data"]
+        st.caption(f"☁️ **Cloud data active:** {len(all_dfs)} tables — "
+                   f"{sum(len(v) for v in all_dfs.values()):,} rows")
+
     else:
-        st.warning("⬆️ Please upload at least one CSV file to get started.")
+        local_files = ["bom_master.csv","production_logs.csv","scrap_logs.csv"]
+        for fname in local_files:
+            try:
+                all_dfs[fname] = pd.read_csv(fname)
+            except FileNotFoundError:
+                pass
+        if all_dfs:
+            st.caption(f"📁 **Using local files:** {', '.join(all_dfs.keys())}")
+        else:
+            st.warning("⬆️ Please upload at least one CSV file to get started.")
+            st.stop()
+
+    if not all_dfs:
+        st.warning("⬆️ Please upload files or load historical data to continue.")
         st.stop()
+
+# End of demo/upload block
+
 
 if not all_dfs:
     st.warning("⬆️ Please upload files or load historical data to continue.")
     st.stop()
 
+# End of demo/upload block
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PLANT HEALTH METRICS
