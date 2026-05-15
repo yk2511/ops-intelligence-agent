@@ -528,9 +528,6 @@ if not all_dfs:
     st.warning("⬆️ Please upload files or load historical data to continue.")
     st.stop()
 
-if not all_dfs:
-    st.warning("⬆️ Please upload files or load historical data to continue.")
-    st.stop()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PLANT HEALTH METRICS
