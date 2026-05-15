@@ -10,3 +10,4 @@ pillow
 requests
 langchain
 tabulate
+numpy
