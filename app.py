@@ -374,7 +374,7 @@ st.markdown("""
 <div class="header-banner">
     <h1>🏭 Raw Material Optimization Dashboard</h1>
     <p>AI-powered operations intelligence for plastic injection moulding plants</p>
-    <span class="header-tag">⚡ Operations Intelligence Platform &nbsp;|&nbsp; Raw Material Optimization</span>
+    <span class="header-tag">⚡ Operations Intelligence Platform &nbsp;|&nbsp; Plastic Injection Moulding</span>
 </div>
 """, unsafe_allow_html=True)
 
